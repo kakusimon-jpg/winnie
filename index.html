@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>赛博牛马的逆袭 - Supabase 军师版</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind Config -->
+    <script>
+        try {
+            if (typeof tailwind !== 'undefined') {
+                tailwind.config = {
+                    theme: {
+                        extend: {
+                            fontFamily: {
+                                sans: ['"Noto Sans SC"', 'sans-serif'],
+                            },
+                            animation: {
+                                'fade-in': 'fadeIn 0.3s ease-out',
+                                'zoom-in': 'zoomIn 0.2s ease-out',
+                                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                            },
+                            keyframes: {
+                                fadeIn: {
+                                    '0%': { opacity: '0', transform: 'translateY(10px)' },
+                                    '100%': { opacity: '1', transform: 'translateY(0)' },
+                                },
+                                zoomIn: {
+                                    '0%': { opacity: '0', transform: 'scale(0.95)' },
+                                    '100%': { opacity: '1', transform: 'scale(1)' },
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) { console.error("Tailwind config error:", e); }
+    </script>
+    
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        body { background-color: #F5F7FA; }
+        
+        /* Markdown/JSON prettify styles */
+        .analysis-card { @apply bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all; }
+        .analysis-title { @apply font-black text-sm text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Application Script -->
+    <script type="text/babel" data-type="module">
+        // Import Dependencies from CDN (ESM)
+        import React, { useState, useEffect, useCallback, useMemo, useRef } from 'https://esm.sh/react@18.2.0';
+        import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+        
+        // Supabase Import
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+        // Lucide Icons Import
+        import { 
+            Plus, ArrowLeft, Trash2, CheckCircle, Circle, AlertCircle, 
+            Cloud, CloudLightning, Loader2, Settings, 
+            Calendar, User, Clock, ChevronLeft, ChevronRight, Check,
+            Flag, X, Briefcase, ChevronDown, Zap, Sparkles, MessageSquareQuote, Key,
+            Bot, ArrowRight, Link as LinkIcon, ExternalLink, Download, Upload, Star,
+            CheckCircle2, ListChecks, FileText, Truck, Coins, ClipboardCheck, Coffee, Smile,
+            LayoutGrid, List, Search, Server, Cpu, BrainCircuit, ShieldAlert, Layers, HeartPulse, 
+            PartyPopper, MessageCircle, Database, UserCheck, Terminal, Copy, AlertTriangle
+        } from 'https://esm.sh/lucide-react@0.344.0';
+
+        // --- Supabase Configuration ---
+        const SUPABASE_URL = "https://rtdbumabpsuwjpklript.supabase.co";
+        const SUPABASE_KEY = "sb_publishable_ajVlmMwxrS1WETY813ifNg_eiyb7N0u";
+        
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- 摸鱼文案库 ---
+        const MOYU_MESSAGES = [
+            "老细，休息一下吧，钱是赚不完的！",
+            "老细，喝口水，深呼吸，摸鱼也是为了更好的工作。",
+            "老细，别太卷了，身体要紧，今天的KPI就先这样吧。",
+            "老细，老板看不见的时候，就是我们充电的时候。",
+            "老细，提醒您：由于工作太努力，系统强制建议您发呆5分钟。",
+            "老细，在这个冰冷的赛博世界，只有摸鱼尚存一丝温暖。",
+            "老细，工作做不完没关系，明天它还在那里等你。",
+            "老细，您已连续工作超过1小时，请立即执行‘带薪如厕’程序。",
+            "老细，只有学会休息的牛马，才能跑得更远。",
+            "老细，摸鱼一时爽，一直摸鱼一直爽（开玩笑的，稍微休息下）。"
+        ];
+
+        // --- 常量配置 ---
+        const urgencyConfig = {
+            quote: { label: '报价', color: 'bg-sky-50 text-sky-600', dot: 'bg-sky-600', icon: FileText },
+            order: { label: '订单', color: 'bg-violet-50 text-violet-600', dot: 'bg-violet-600', icon: ClipboardCheck },
+            shipping: { label: '发货', color: 'bg-amber-50 text-amber-600', dot: 'bg-amber-600', icon: Truck },
+            payment: { label: '收款', color: 'bg-emerald-50 text-emerald-600', dot: 'bg-emerald-600', icon: Coins },
+            completed: { label: '已完成', color: 'bg-slate-100 text-slate-500', dot: 'bg-slate-500', icon: CheckCircle2 },
+            
+            // 兼容旧数据
+            contract: { label: '合同(旧)', color: 'bg-indigo-50 text-indigo-600', dot: 'bg-indigo-600', icon: Briefcase },
+            acceptance: { label: '验收(旧)', color: 'bg-emerald-50 text-emerald-600', dot: 'bg-emerald-600' },
+            high: { label: '紧急(旧)', color: 'bg-[#FFEFED] text-[#F56C6C]', dot: 'bg-[#F56C6C]', dot: 'bg-[#F56C6C]' },
+            medium: { label: '重要(旧)', color: 'bg-[#FFF7E6] text-[#FA8C16]', dot: 'bg-[#FA8C16]', dot: 'bg-[#FA8C16]' },
+            normal: { label: '普通(旧)', color: 'bg-[#E6F7FF] text-[#4A90E2]', dot: 'bg-[#4A90E2]', dot: 'bg-[#4A90E2]' },
+        };
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+        const TIME_HOURS = Array.from({ length: 17 }, (_, i) => 8 + i);
+        const WEEK_DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+        const getStartOfWeek = (d) => {
+            d = new Date(d);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            const startOfWeek = new Date(d.setDate(diff));
+            startOfWeek.setHours(0, 0, 0, 0);
+            return startOfWeek;
+        };
+
+        const safeDate = (val) => {
+            if (!val) return new Date();
+            if (typeof val === 'string') return new Date(val); // Handle Supabase ISO strings
+            if (typeof val === 'number') return new Date(val);
+            if (val && val.seconds) return new Date(val.seconds * 1000); // Handle legacy Firebase Timestamp
+            if (val instanceof Date) return val;
+            return new Date();
+        };
+
+        // --- AI 服务逻辑 ---
+        const callAI = async (apiKey, baseUrl, model, prompt, expectJson = true) => {
+            let apiUrl = baseUrl || "https://api.siliconflow.cn/v1";
+            if (!apiUrl.endsWith('/')) apiUrl += '/';
+            if (!apiUrl.includes('chat/completions')) apiUrl += 'chat/completions';
+
+            const apiModel = model || "deepseek-ai/DeepSeek-V3";
+
+            let retries = 3;
+            let delay = 1000;
+            
+            while (retries > 0) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: apiModel,
+                            messages: [{ role: "user", content: prompt }],
+                            temperature: 0.7,
+                            stream: false,
+                            ...(expectJson ? { response_format: { type: "json_object" } } : {}) 
+                        })
+                    });
+
+                    if (!response.ok) {
+                         const errText = await response.text();
+                         throw new Error(`API Error ${response.status}: ${errText}`);
+                    }
+                    
+                    const data = await response.json();
+                    let text = data.choices?.[0]?.message?.content;
+                    
+                    if (!text) return null;
+                    
+                    if (expectJson) {
+                        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            console.error("JSON Parse Error", text);
+                            const jsonMatch = text.match(/\{[\s\S]*\}/);
+                            if (jsonMatch) return JSON.parse(jsonMatch[0]);
+                            return null;
+                        }
+                    }
+                    return text;
+                } catch (error) {
+                    console.error("AI Call Failed", error);
+                    if (retries > 1) {
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; retries--; continue;
+                    }
+                    throw error;
+                }
+            }
+        };
+
+        // --- 辅助组件 (保持不变) ---
+        const GlobalSearchBar = ({ tasks, onSelectTask, onSelectAssignee }) => {
+            const [query, setQuery] = useState('');
+            const [suggestions, setSuggestions] = useState([]);
+            const [showSuggestions, setShowSuggestions] = useState(false);
+            const wrapperRef = useRef(null);
+
+            const allAssignees = useMemo(() => {
+                const set = new Set();
+                tasks.forEach(t => t.nodes?.forEach(n => {
+                    if(n.assignee && !n.completed) set.add(n.assignee); 
+                }));
+                return Array.from(set).sort();
+            }, [tasks]);
+
+            useEffect(() => {
+                if (!query.trim()) { setSuggestions([]); return; }
+                const lowerQuery = query.toLowerCase();
+                const matchedTasks = tasks.filter(t => t.title && t.title.toLowerCase().includes(lowerQuery)).map(t => ({ type: 'task', data: t })).slice(0, 5);
+                const matchedAssignees = allAssignees.filter(a => a.toLowerCase().includes(lowerQuery)).map(a => ({ type: 'assignee', data: a })).slice(0, 5);
+                setSuggestions([...matchedAssignees, ...matchedTasks]);
+            }, [query, tasks, allAssignees]);
+
+            const handleSelect = (item) => {
+                setQuery('');
+                setShowSuggestions(false);
+                if (item.type === 'task') onSelectTask(item.data.id);
+                else if (item.type === 'assignee') onSelectAssignee(item.data);
+            };
+
+            useEffect(() => {
+                const handleClickOutside = (event) => { if (wrapperRef.current && !wrapperRef.current.contains(event.target)) setShowSuggestions(false); };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
+
+            return (
+                <div className="relative flex-1 max-w-md mx-4" ref={wrapperRef}>
+                    <div className="flex items-center bg-slate-100/80 rounded-xl px-3 py-2 border border-transparent focus-within:bg-white focus-within:border-blue-200 transition-all">
+                        <Search size={16} className="text-slate-400 mr-2 flex-shrink-0" />
+                        <input type="text" value={query} onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} placeholder="搜项目 / 找人..." className="bg-transparent border-none outline-none text-sm font-medium text-slate-700 w-full placeholder:text-slate-400" />
+                        {query && <button onClick={() => setQuery('')} className="text-slate-300 hover:text-slate-500 ml-1"><X size={14}/></button>}
+                    </div>
+                    {showSuggestions && suggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2">
+                            {suggestions.map((item, index) => (
+                                <div key={index} onClick={() => handleSelect(item)} className="px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors flex items-center justify-between hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                                    {item.type === 'task' ? (
+                                        <>
+                                            <div className="flex items-center gap-2 truncate text-slate-700">
+                                                <Briefcase size={14} className="text-slate-400"/>
+                                                <span className="truncate">{item.data.title}</span>
+                                            </div>
+                                            {item.data.customerName && <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{item.data.customerName}</span>}
+                                        </>
+                                    ) : (
+                                        <div className="flex items-center gap-2 truncate text-[#4A90E2]">
+                                            <UserCheck size={14} />
+                                            <span>对接人：{item.data}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 border animate-fade-in">
+                        <h3 className="text-lg font-black text-slate-800 mb-2">{title}</h3>
+                        <p className="text-sm text-slate-600 mb-6 font-medium">{message}</p>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl">取消</button>
+                            <button onClick={onConfirm} className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl shadow-lg">确定删除</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const SetupGuideModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+            
+            const sqlCode = `create table if not exists public.tasks (
+  id text primary key,
+  title text,
+  "customerName" text,
+  summary text,
+  urgency text,
+  nodes jsonb,
+  "createdAt" timestamptz default now()
+);
+
+alter publication supabase_realtime add table public.tasks;
+
+alter table public.tasks enable row level security;
+
+create policy "Public Access" on public.tasks for all using (true) with check (true);`;
+
+            const handleCopy = () => {
+                navigator.clipboard.writeText(sqlCode);
+                alert("代码已复制！请前往 Supabase 后台运行。");
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[200] flex items-center justify-center p-4 animate-in fade-in zoom-in">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full p-8 border flex flex-col h-[80vh]">
+                        <div className="flex items-start gap-4 mb-6">
+                            <div className="p-3 bg-indigo-100 rounded-2xl text-indigo-600"><Database size={32}/></div>
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-800">数据库初始化</h3>
+                                <p className="text-sm text-slate-500 mt-1 font-medium">老细，Supabase 还没检测到 <code className="bg-slate-100 px-1 rounded text-slate-700">tasks</code> 表。请按照以下步骤激活数据库。</p>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+                            <div className="flex items-center gap-3 p-4 bg-yellow-50 border border-yellow-100 rounded-2xl">
+                                <span className="bg-yellow-500 text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">1</span>
+                                <p className="text-sm text-yellow-800 font-bold">登录 <a href="https://supabase.com/dashboard" target="_blank" className="underline hover:text-yellow-900">Supabase Dashboard</a>，进入 SQL Editor。</p>
+                            </div>
+                             <div className="flex items-center gap-3 p-4 bg-yellow-50 border border-yellow-100 rounded-2xl">
+                                <span className="bg-yellow-500 text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">2</span>
+                                <p className="text-sm text-yellow-800 font-bold">复制下方 SQL 代码并运行 (Run)。</p>
+                            </div>
+
+                            <div className="relative group">
+                                <div className="absolute top-3 right-3">
+                                    <button onClick={handleCopy} className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all border border-white/10">
+                                        <Copy size={14}/> 复制 SQL
+                                    </button>
+                                </div>
+                                <pre className="bg-slate-900 text-slate-300 p-6 rounded-2xl text-xs font-mono overflow-x-auto leading-relaxed border border-slate-700 shadow-inner">
+                                    {sqlCode}
+                                </pre>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 pt-6 border-t border-slate-100 flex justify-end gap-3">
+                            <button onClick={()=>window.location.reload()} className="px-6 py-3 bg-[#4A90E2] text-white rounded-xl text-sm font-black shadow-lg shadow-blue-100 hover:bg-[#357ABD] transition-all flex items-center gap-2">
+                                <CheckCircle size={18}/> 我已运行，刷新页面
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const MoyuModal = ({ isOpen, onClose, message }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-md z-[200] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full p-8 border text-center relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-300"></div>
+                        <div className="mb-6 inline-flex p-4 bg-yellow-50 rounded-full text-yellow-500 shadow-sm"><Coffee size={48} strokeWidth={1.5} /></div>
+                        <h3 className="text-2xl font-black text-slate-800 mb-4">摸鱼时间到！</h3>
+                        <p className="text-lg text-slate-600 mb-8 font-medium leading-relaxed">{message}</p>
+                        <button onClick={onClose} className="w-full py-3.5 text-sm font-black text-white bg-[#4A90E2] hover:bg-[#357ABD] rounded-2xl shadow-lg flex items-center justify-center gap-2"><Smile size={20}/> 朕已阅</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const BullIcon = () => (
+            <div className="w-8 h-8 bg-[#4A90E2] rounded-lg flex items-center justify-center shadow-md shadow-blue-200">
+                <span className="text-white font-black text-lg leading-none" style={{ fontFamily: '"Noto Sans SC", sans-serif' }}>牛</span>
+            </div>
+        );
+
+        const CompositionInput = ({ value, onChange, className, onKeyDown, ...props }) => {
+            const [innerValue, setInnerValue] = useState(value);
+            const [isComposing, setIsComposing] = useState(false);
+            useEffect(() => { if (!isComposing) setInnerValue(value); }, [value, isComposing]);
+            return <input {...props} value={innerValue} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={(e) => { setIsComposing(false); setInnerValue(e.target.value); onChange(e); }} onChange={(e) => { setInnerValue(e.target.value); if (!isComposing) onChange(e); }} onKeyDown={onKeyDown} className={`transition-all duration-200 outline-none ${className}`}/>;
+        };
+
+        const AutocompleteInput = ({ value, onChange, options, placeholder, className }) => {
+            const [showOptions, setShowOptions] = useState(false);
+            const wrapperRef = useRef(null);
+            useEffect(() => {
+                function handleClickOutside(event) { if (wrapperRef.current && !wrapperRef.current.contains(event.target)) setShowOptions(false); }
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, [wrapperRef]);
+            const filteredOptions = useMemo(() => options ? Array.from(new Set(options)).filter(opt => !value || opt.toLowerCase().includes(value.toLowerCase())) : [], [options, value]);
+            return (
+                <div className="relative inline-block w-full" ref={wrapperRef}>
+                    <div className="relative">
+                        <CompositionInput value={value} onChange={(e) => { onChange(e); setShowOptions(true); }} onFocus={() => setShowOptions(true)} className={`${className} pr-6`} placeholder={placeholder} />
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-[#4A90E2] p-1" onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}><ChevronDown size={14} /></div>
+                    </div>
+                    {showOptions && filteredOptions.length > 0 && (
+                        <div className="absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto w-full">
+                            {filteredOptions.map((opt, index) => (
+                                <div key={`${opt}-${index}`} className="px-3 py-2 text-sm cursor-pointer border-b border-slate-50 last:border-0 hover:bg-[#E6F7FF] hover:text-[#4A90E2]" onClick={() => { onChange({ target: { value: opt } }); setShowOptions(false); }}>{opt}</div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const CompositionTextarea = ({ value, onChange, className, ...props }) => {
+            const [innerValue, setInnerValue] = useState(value);
+            const [isComposing, setIsComposing] = useState(false);
+            useEffect(() => { if (!isComposing) setInnerValue(value); }, [value, isComposing]);
+            return <textarea {...props} value={innerValue} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={(e) => { setIsComposing(false); setInnerValue(e.target.value); onChange(e); }} onChange={(e) => { setInnerValue(e.target.value); if (!isComposing) onChange(e); }} className={`transition-all duration-200 outline-none ${className}`}/>;
+        };
+
+        const DateTimePicker = ({ initialDate, onSelect, onClose, isDateOnly = false }) => {
+            const [currentMonth, setCurrentMonth] = useState(safeDate(initialDate));
+            const [selectedDate, setSelectedDate] = useState(initialDate ? safeDate(initialDate) : new Date());
+            const [selectedHour, setSelectedHour] = useState(new Date().getHours());
+            const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+            const offset = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay() || 7; 
+            const handleConfirm = () => { if (!selectedDate) return; const final = new Date(selectedDate); final.setHours(isDateOnly ? 0 : selectedHour, 0, 0, 0); onSelect(final.getTime()); onClose(); };
+            
+            return (
+                <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border border-slate-100 overflow-hidden">
+                        <div className="grid grid-cols-1 sm:grid-cols-2">
+                            <div className="p-5 sm:border-r border-slate-100">
+                                <div className="flex justify-between items-center mb-4">
+                                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}><ChevronLeft size={18}/></button>
+                                    <span className="font-bold text-slate-700">{currentMonth.getFullYear()}年 {currentMonth.getMonth() + 1}月</span>
+                                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}><ChevronRight size={18}/></button>
+                                </div>
+                                <div className="grid grid-cols-7 gap-1 text-center text-xs mb-2 text-slate-400 font-bold">
+                                    {['一','二','三','四','五','六','日'].map(d => <div key={d}>{d}</div>)}
+                                </div>
+                                <div className="grid grid-cols-7 gap-1">
+                                    {Array.from({ length: offset === 7 ? 6 : offset - 1 }).map((_, i) => <div key={i} />)}
+                                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                                        const day = i + 1;
+                                        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+                                        const isSelected = selectedDate?.toDateString() === date.toDateString();
+                                        return <button key={day} onClick={() => { setSelectedDate(date); if (isDateOnly) { const f = new Date(date); f.setHours(0,0,0,0); onSelect(f.getTime()); onClose(); } }} className={`h-9 w-9 rounded-full text-sm font-bold transition-all ${isSelected ? 'bg-[#4A90E2] text-white shadow-lg' : 'hover:bg-slate-50 text-slate-600'}`}>{day}</button>;
+                                    })}
+                                </div>
+                            </div>
+                            {!isDateOnly && (
+                                <div className="p-5 bg-slate-50/50 flex flex-col">
+                                    <h4 className="text-xs font-black text-[#4A90E2] mb-3 flex items-center gap-1 uppercase"><Clock size={14}/> 设置具体时段</h4>
+                                    <div className="grid grid-cols-3 gap-2 overflow-y-auto max-h-48 pr-1 flex-1 no-scrollbar">
+                                        {TIME_HOURS.map(h => (
+                                            <button key={h} onClick={() => setSelectedHour(h)} className={`py-2 rounded-xl text-xs font-bold transition-all ${selectedHour === h ? 'bg-[#4A90E2] text-white shadow-md' : 'bg-white border text-slate-500 hover:bg-white hover:border-[#4A90E2]'}`}>{h.toString().padStart(2,'0')}:00</button>
+                                        ))}
+                                    </div>
+                                    <div className="mt-5 flex justify-end gap-2 pt-3 border-t">
+                                        <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600">取消</button>
+                                        <button onClick={handleConfirm} className="px-4 py-2 bg-[#4A90E2] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#357ABD]">确定</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AIAnalysisModal = ({ tasks, onClose }) => {
+            const [data, setData] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+
+            useEffect(() => {
+                const analyze = async () => {
+                    const apiKey = localStorage.getItem('ai_api_key');
+                    const baseUrl = localStorage.getItem('ai_base_url');
+                    const model = localStorage.getItem('ai_model');
+                    const userSystemPrompt = localStorage.getItem('ai_system_prompt') || '';
+
+                    if (!apiKey) { setError("请先在设置中填入 SiliconFlow API Key"); setLoading(false); return; }
+                    
+                    const context = tasks.map(t => ({ 
+                        title: t.title, 
+                        customer: t.customerName, 
+                        urgency: t.urgency,
+                        nodesCount: t.nodes?.length,
+                        activeNodes: t.nodes?.filter(n => !n.completed).map(n => n.text)
+                    }));
+
+                    const corePrompt = `你是一个专业的任务管理专家，也是一位幽默犀利的“赛博军师”。
+                    你的目标是分析用户当前的项目和待办事项，提供极具操作性的战术建议，并关注用户的工作负荷与健康。
+                    
+                    ${userSystemPrompt ? `特别注意用户设定的额外指令：${userSystemPrompt}` : ''}
+
+                    请严格遵守以下语气要求：
+                    1. **称呼**：多用“老细”称呼用户，显得亲切又带有敬意。**绝对禁止**使用“兄弟”、“亲”等称呼。
+                    2. **风格**：幽默、犀利、一针见血。
+
+                    请严格遵守以下分析逻辑：
+                    1. **优先级判断**：识别出那些如果不做后果最严重的任务（火烧眉毛），而不仅仅是看截止日期。
+                    2. **批量处理**：仔细扫描任务列表，找出可以合并处理的事项。
+                    3. **时间优化**：根据任务的认知负荷分配时间段。
+                    4. **健康与工作量**：评估过劳风险，给出微休息和饮食建议。
+
+                    请严格返回如下 JSON 格式 (不要使用 Markdown 代码块，直接返回纯 JSON 字符串)：
+                    {
+                    "mentorMessage": "一段简短、有力、幽默的开场寄语，必须包含‘老细’的称呼。",
+                    "priorities": ["任务A - 原因：...", "任务B - 原因：..."],
+                    "risks": ["风险点1 - 建议对策", "风险点2 - 建议对策"],
+                    "batchSuggestions": ["建议1：...", "建议2：..."],
+                    "timeOptimization": ["建议1：...", "建议2：..."],
+                    "workloadAssessment": {
+                        "level": "适中 / 过饱和 / 轻松",
+                        "score": 85,
+                        "healthTips": ["饮食建议：...", "运动建议：..."]
+                    },
+                    "relaxTips": ["摸鱼建议1", "摸鱼建议2"],
+                    "encouragement": "一句符合用户设定的总结（如：幽默自嘲、热血鼓励或严厉鞭策）"
+                    }`;
+                    
+                    const prompt = `${corePrompt}。当前任务数据：${JSON.stringify(context)}`;
+                    
+                    try { 
+                        const res = await callAI(apiKey, baseUrl, model, prompt, true); 
+                        if (res) setData(res);
+                        else throw new Error("API 返回空数据");
+                    } catch (e) { 
+                        setError(`分析失败: ${e.message}`); 
+                    } finally { 
+                        setLoading(false); 
+                    }
+                };
+                analyze();
+            }, [tasks]);
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col border border-slate-100 overflow-hidden">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+                            <div>
+                                <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><BrainCircuit className="text-indigo-600"/> 赛博军师作战室</h3>
+                                <p className="text-xs text-slate-500 font-medium mt-1">SiliconFlow 驱动的战术分析</p>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-white/50 rounded-full transition-colors"><X size={24} className="text-slate-400"/></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 bg-[#F8FAFC]">
+                            {loading ? (
+                                <div className="h-full flex flex-col items-center justify-center gap-6 text-slate-400">
+                                    <div className="relative">
+                                        <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-500 rounded-full animate-spin"></div>
+                                        <Bot className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-500 animate-pulse" size={24}/>
+                                    </div>
+                                    <p className="font-bold text-sm animate-pulse">正在扫描战局，制定作战计划...</p>
+                                </div>
+                            ) : error ? (
+                                <div className="h-full flex flex-col items-center justify-center text-red-400 gap-4">
+                                    <AlertCircle size={48} className="opacity-20"/>
+                                    <p className="font-bold">{error}</p>
+                                </div>
+                            ) : data ? (
+                                <div className="space-y-6">
+                                    {data.mentorMessage && (
+                                        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden animate-zoom-in">
+                                            <div className="absolute top-0 right-0 p-4 opacity-20"><MessageCircle size={64}/></div>
+                                            <div className="relative z-10">
+                                                <div className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-2 flex items-center gap-2"><Sparkles size={12}/> 军师锦囊</div>
+                                                <div className="text-lg font-bold font-serif leading-relaxed">“ {data.mentorMessage} ”</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="md:col-span-2 analysis-card border-l-4 border-l-red-500">
+                                            <div className="analysis-title text-red-500"><ShieldAlert size={16}/> 火烧眉毛 (Priorities)</div>
+                                            <ul className="space-y-2">
+                                                {data.priorities?.map((item, i) => (
+                                                    <li key={i} className="flex gap-2 text-sm font-bold text-slate-700">
+                                                        <span className="text-red-500">•</span> {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                        <div className="analysis-card relative overflow-hidden">
+                                            <div className="analysis-title text-indigo-500"><HeartPulse size={16}/> 负荷评估</div>
+                                            <div className="absolute top-4 right-4 text-4xl font-black text-indigo-100 opacity-50">{data.workloadAssessment?.score}</div>
+                                            <div className="text-2xl font-black text-slate-800 mb-1">{data.workloadAssessment?.level}</div>
+                                            <div className="w-full bg-slate-100 h-2 rounded-full mb-3 overflow-hidden">
+                                                <div className="bg-indigo-500 h-full rounded-full transition-all duration-1000" style={{width: `${data.workloadAssessment?.score || 0}%`}}></div>
+                                            </div>
+                                            <div className="text-xs text-slate-500 space-y-1">
+                                                {data.workloadAssessment?.healthTips?.map((tip,i)=><div key={i}>• {tip}</div>)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <div className="analysis-card">
+                                                <div className="analysis-title text-blue-500"><Layers size={16}/> 批量处理建议</div>
+                                                <ul className="space-y-2 text-sm text-slate-600 font-medium">
+                                                    {data.batchSuggestions?.map((s,i)=><li key={i} className="bg-blue-50/50 p-2 rounded-lg">{s}</li>)}
+                                                </ul>
+                                            </div>
+                                            <div className="analysis-card">
+                                                <div className="analysis-title text-amber-500"><Clock size={16}/> 时间优化方案</div>
+                                                <ul className="space-y-2 text-sm text-slate-600 font-medium">
+                                                    {data.timeOptimization?.map((s,i)=><li key={i} className="bg-amber-50/50 p-2 rounded-lg">{s}</li>)}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div className="analysis-card">
+                                                <div className="analysis-title text-orange-500"><Flag size={16}/> 潜在风险</div>
+                                                <ul className="space-y-2 text-sm text-slate-600 font-medium">
+                                                    {data.risks?.map((s,i)=><li key={i} className="flex gap-2"><span className="text-orange-400">⚠️</span> {s}</li>)}
+                                                </ul>
+                                            </div>
+                                            <div className="analysis-card bg-gradient-to-br from-green-50 to-emerald-50 border-green-100">
+                                                <div className="analysis-title text-emerald-600"><PartyPopper size={16}/> 摸鱼/微休息指南</div>
+                                                <ul className="space-y-2 text-sm text-emerald-800 font-bold">
+                                                    {data.relaxTips?.map((s,i)=><li key={i}>☕ {s}</li>)}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-800 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
+                                        <Bot className="absolute -right-4 -bottom-4 text-slate-700 opacity-20" size={120}/>
+                                        <div className="relative z-10">
+                                            <div className="text-xs font-bold text-slate-400 uppercase mb-2">军师总结</div>
+                                            <div className="text-lg font-bold italic font-serif">“ {data.encouragement} ”</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const QuickNodeForm = ({ tasks, allCustomers, allAssignees, initialDate, onSubmit, onClose }) => {
+            const [taskTitle, setTaskTitle] = useState('');
+            const [customer, setCustomer] = useState('');
+            const [assignee, setAssignee] = useState('');
+            const [content, setContent] = useState('');
+            const [date, setDate] = useState(initialDate || Date.now());
+            const [pickerOpen, setPickerOpen] = useState(false);
+            const [aiMsg, setAiMsg] = useState('');
+            const [isAiLoading, setIsAiLoading] = useState(false);
+            const [isImportant, setIsImportant] = useState(false);
+
+            useEffect(() => {
+                const t = tasks.find((t) => t.title === taskTitle);
+                if (t?.customerName) setCustomer(t.customerName);
+            }, [taskTitle, tasks]);
+
+            const handleAiSuggest = async () => {
+                if (!taskTitle.trim() || !content.trim()) return;
+                
+                const apiKey = localStorage.getItem('ai_api_key');
+                const baseUrl = localStorage.getItem('ai_base_url');
+                const model = localStorage.getItem('ai_model');
+                const systemPrompt = localStorage.getItem('ai_system_prompt') || '';
+
+                if (!apiKey) { setAiMsg("老细，请先填入 API Key。"); return; }
+                setIsAiLoading(true);
+                
+                const prompt = `你是执行助理小秘。${systemPrompt ? `你的老板有以下管理哲学：“${systemPrompt}”，请在建议时考虑这一点。` : ''} 老细有个任务节点"${content}"属于任务"${taskTitle}"，建议个时间戳和理由。返回纯JSON格式: {reason: "...", timestamp: 1234567890000}。确保 timestamp 是毫秒级时间戳。不要输出 Markdown 代码块。`;
+                
+                try {
+                    const res = await callAI(apiKey, baseUrl, model, prompt, true);
+                    if (res?.timestamp) { setDate(Number(res.timestamp)); setAiMsg(res.reason); }
+                    else { setAiMsg("元芳没听懂，再试一次？"); }
+                } catch (e) { setAiMsg(`哎呀，元芳也算不出来了: ${e.message}`); }
+                finally { setIsAiLoading(false); }
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-3xl shadow-2xl border relative z-20 space-y-6 animate-fade-in">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-50">
+                        <h3 className="text-lg font-black text-[#4A90E2] flex items-center gap-2"><Zap size={22} className="fill-current"/> 快速添加执行节点</h3>
+                        <button onClick={onClose} className="p-1 text-slate-300 hover:text-red-500 transition-colors"><X size={24}/></button>
+                    </div>
+                    {aiMsg && <div className="p-4 bg-blue-50 text-blue-700 text-xs font-bold rounded-2xl border border-blue-100 animate-fade-in">{aiMsg}</div>}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">所属任务</label>
+                            <AutocompleteInput value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} options={tasks.map((t)=>t.title)} placeholder="输入或选择任务" className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-transparent focus:bg-white focus:border-blue-200 transition-all" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">关联客户</label>
+                            <AutocompleteInput value={customer} onChange={(e) => setCustomer(e.target.value)} options={allCustomers} placeholder="输入或选择客户" className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-transparent focus:bg-white focus:border-blue-200 transition-all" />
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">节点内容</label>
+                        <CompositionInput value={content} onChange={(e) => setContent(e.target.value)} placeholder="今天要干点啥..." className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-transparent focus:bg-white focus:border-blue-200 transition-all" />
+                    </div>
+                    <div className="flex gap-4 items-end">
+                        <div className="flex-1 space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">执行人与标记</label>
+                            <div className="flex gap-3">
+                                <div className="w-1/2">
+                                    <AutocompleteInput value={assignee} onChange={(e) => setAssignee(e.target.value)} options={allAssignees} placeholder="执行人" className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-transparent focus:bg-white focus:border-blue-200 transition-all" />
+                                </div>
+                                <div className="flex-1 flex gap-2">
+                                    <button onClick={() => setIsImportant(!isImportant)} className={`flex-1 p-3 rounded-2xl transition-all shadow-sm flex justify-center items-center border border-transparent ${isImportant ? 'bg-orange-100 text-orange-500 border-orange-200' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`} title="设为重要">
+                                        <Star size={20} className={isImportant ? "fill-current" : ""}/>
+                                    </button>
+                                    <button onClick={handleAiSuggest} disabled={isAiLoading} className="flex-1 p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-all shadow-sm flex justify-center items-center border border-transparent hover:border-blue-200" title="元芳建议">
+                                        {isAiLoading ? <Loader2 size={20} className="animate-spin"/> : <Sparkles size={20}/>}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">执行时间</label>
+                        <button onClick={() => setPickerOpen(true)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold text-slate-600 hover:bg-white hover:border-blue-200 border border-transparent transition-all flex items-center justify-between group">
+                            <span className="flex items-center gap-2">
+                                <Clock size={18} className="text-slate-400 group-hover:text-blue-500 transition-colors"/>
+                                {safeDate(date).toLocaleDateString('zh-CN', {month:'long', day:'numeric', hour:'2-digit', minute:'2-digit', weekday:'short'})}
+                            </span>
+                            <ChevronDown size={18} className="text-slate-300"/>
+                        </button>
+                    </div>
+                    <button onClick={() => onSubmit({ taskTitle, customer, assignee, content, date, endDate: null, link: '', isImportant })} disabled={!taskTitle || !content} className="w-full py-4 bg-[#4A90E2] text-white rounded-2xl font-black shadow-lg shadow-blue-100 hover:bg-[#357ABD] active:scale-95 disabled:opacity-30 transition-all mt-2">确认添加</button>
+                    {pickerOpen && <DateTimePicker initialDate={date} onClose={() => setPickerOpen(false)} onSelect={setDate} />}
+                </div>
+            );
+        };
+
+        const TaskDetailView = ({ task, onUpdate, onClose, allAssignees, allCustomers, onDeleteNode }) => {
+            const [pickerState, setPicker] = useState({open: false, nodeId: null, date: null});
+            const [newNodeText, setNewNodeText] = useState('');
+            const [nodeFilter, setNodeFilter] = useState('active');
+
+            const visibleNodes = useMemo(() => (task.nodes || []).filter((n) => nodeFilter === 'active' ? !n.completed : n.completed), [task.nodes, nodeFilter]);
+
+            const handleUpdateNode = (nodeId, updates) => {
+                const newNodes = task.nodes.map((n) => {
+                    if (n.id === nodeId) {
+                        let extra = {};
+                        if ('completed' in updates && updates.completed && !n.completed) {
+                            extra = { completedAt: Date.now() };
+                        }
+                        return { ...n, ...updates, ...extra };
+                    }
+                    return n;
+                });
+                onUpdate(task.id, { nodes: newNodes });
+            };
+
+            return (
+                <div className="animate-fade-in space-y-6">
+                    {pickerState.open && <DateTimePicker initialDate={pickerState.date} onClose={() => setPicker({open:false, nodeId:null, date:null})} onSelect={(ts) => { handleUpdateNode(pickerState.nodeId, { plannedDate: ts }); setPicker({open:false, nodeId:null, date:null}); }} />}
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                        <CompositionInput value={task.title || ''} onChange={(e) => onUpdate(task.id, { title: e.target.value })} className="w-full text-3xl font-black text-slate-800 mb-6 focus:bg-slate-50 p-2 rounded-2xl" placeholder="任务名称" />
+                        <div className="flex flex-wrap gap-4 items-center px-2">
+                            <div className="inline-flex bg-[#F5F7FA] p-1.5 rounded-2xl border border-slate-100 flex-wrap">
+                                {(['quote', 'order', 'shipping', 'payment', 'completed']).map(u => (
+                                    <button 
+                                        key={u} 
+                                        onClick={() => {
+                                            const updates = { urgency: u };
+                                            if (u === 'completed' && task.nodes) {
+                                                const autoCompletedNodes = task.nodes.map(n => {
+                                                    if (!n.completed) {
+                                                        return { ...n, completed: true, completedAt: Date.now() };
+                                                    }
+                                                    return n;
+                                                });
+                                                updates.nodes = autoCompletedNodes;
+                                            }
+                                            onUpdate(task.id, updates);
+                                        }} 
+                                        className={`px-4 py-1.5 text-xs font-black rounded-xl transition-all ${task.urgency === u ? 'bg-white shadow-sm font-bold text-[#4A90E2]' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        {urgencyConfig[u].label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="h-6 w-px bg-slate-100 mx-2 hidden sm:block"></div>
+                            <AutocompleteInput value={task.customerName || ''} onChange={(e) => onUpdate(task.id, { customerName: e.target.value })} options={allCustomers} placeholder="设置客户名" className="bg-[#F5F7FA] rounded-xl px-4 py-2 text-sm font-bold w-48 border border-transparent focus:bg-white focus:border-blue-100" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-1 bg-white p-7 rounded-3xl border border-slate-100 shadow-sm h-fit">
+                            <div className="font-black text-sm text-slate-400 mb-4 flex items-center gap-2 uppercase tracking-widest"><AlertCircle size={14}/> 核心摘要</div>
+                            <CompositionTextarea value={task.summary || ''} onChange={(e) => onUpdate(task.id, { summary: e.target.value })} className="w-full h-48 bg-[#F5F7FA] rounded-2xl p-4 text-sm font-medium resize-none border border-transparent focus:border-[#4A90E2] focus:bg-white transition-all leading-relaxed" placeholder="在这里记下关键背景..." />
+                        </div>
+                        <div className="lg:col-span-2 bg-white p-7 rounded-3xl border border-slate-100 shadow-sm min-h-[500px] flex flex-col">
+                            <div className="flex justify-between items-center mb-6">
+                                <div className="flex items-center gap-3">
+                                    <span className="font-black text-slate-800">执行节点</span>
+                                    <div className="flex bg-slate-100 p-1 rounded-xl border">
+                                        <button onClick={() => setNodeFilter('active')} className={`px-4 py-1.5 text-xs font-black rounded-lg transition-all ${nodeFilter === 'active' ? 'bg-white shadow-sm text-[#4A90E2]' : 'text-slate-400'}`}>待办项</button>
+                                        <button onClick={() => setNodeFilter('completed')} className={`px-4 py-1.5 text-xs font-black rounded-lg transition-all ${nodeFilter === 'completed' ? 'bg-white shadow-sm text-[#4A90E2]' : 'text-slate-400'}`}>已完成</button>
+                                    </div>
+                                </div>
+                                <span className="text-xs font-black text-slate-300">{task.nodes?.filter((n)=>n.completed).length || 0} / {task.nodes?.length || 0}</span>
+                            </div>
+                            <div className="space-y-4 flex-1">
+                                {visibleNodes.length === 0 && (
+                                    <div className="h-40 flex flex-col items-center justify-center text-slate-300 font-bold border-2 border-dashed rounded-3xl">
+                                        <Check size={32} className="mb-2 opacity-20"/>
+                                        <p className="text-xs">暂无{nodeFilter === 'active' ? '待办' : '已完成'}事项</p>
+                                    </div>
+                                )}
+                                {visibleNodes.map((node) => (
+                                    <div key={node.id} className={`group p-4 rounded-2xl border transition-all relative ${node.isImportant ? 'border-orange-100 bg-orange-50/30' : 'border-slate-50 hover:border-[#4A90E2]/30 hover:bg-[#F5F7FA]'}`}>
+                                        <div className="flex items-center gap-4 mb-2">
+                                            <button onClick={() => handleUpdateNode(node.id, { completed: !node.completed })} className={`transition-colors ${node.completed ? 'text-green-500' : 'text-slate-200 hover:text-[#4A90E2]'}`}>
+                                                {node.completed ? <CheckCircle size={22} className="fill-current bg-white rounded-full"/> : <Circle size={22}/>}
+                                            </button>
+                                            <CompositionInput value={node.text || ''} onChange={(e) => handleUpdateNode(node.id, { text: e.target.value })} className={`flex-1 bg-transparent text-sm font-bold ${node.completed ? 'line-through text-slate-300' : 'text-slate-700'}`} />
+                                            <button onClick={() => handleUpdateNode(node.id, { isImportant: !node.isImportant })} className={`transition-colors opacity-0 group-hover:opacity-100 ${node.isImportant ? 'text-orange-400 opacity-100' : 'text-slate-200 hover:text-orange-400'}`}>
+                                                <Star size={18} className={node.isImportant ? "fill-current" : ""} />
+                                            </button>
+                                            <button onClick={() => onDeleteNode(task.id, node.id)} className="text-slate-200 hover:text-red-500 opacity-100 transition-all p-1 z-20 relative" title="删除节点"><Trash2 size={16}/></button>
+                                        </div>
+                                        <div className="pl-10 flex gap-5 text-[10px] font-black items-center">
+                                            <div className="flex items-center gap-1.5 text-slate-400 focus-within:text-blue-500 transition-colors">
+                                                <User size={12}/>
+                                                <AutocompleteInput value={node.assignee || ''} onChange={(e) => handleUpdateNode(node.id, { assignee: e.target.value })} options={allAssignees} placeholder="对接人" className="bg-transparent border-b border-dashed w-20 focus:w-24 transition-all outline-none h-4" />
+                                            </div>
+                                            <button onClick={() => setPicker({open:true, nodeId: node.id, date: node.plannedDate})} className="text-[#4A90E2] flex items-center gap-1.5 hover:underline bg-blue-50/50 px-2 py-1 rounded-lg">
+                                                <Clock size={12}/> {safeDate(node.plannedDate).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-8 p-3 bg-slate-50 rounded-2xl border border-dashed focus-within:bg-white focus-within:border-[#4A90E2] focus-within:ring-4 focus-within:ring-blue-50 transition-all">
+                                <CompositionInput value={newNodeText} onChange={(e) => setNewNodeText(e.target.value)} onKeyDown={(e) => {if(e.key==='Enter' && newNodeText.trim()) { 
+                                    const n = { id: generateId(), text: newNodeText.trim(), completed: false, assignee: '', plannedDate: null, plannedEndDate: null, isImportant: false };
+                                    onUpdate(task.id, { nodes: [...(task.nodes||[]), n] });
+                                    setNewNodeText(''); setNodeFilter('active');
+                                }}} placeholder="输入待办事项并按回车直接添加..." className="w-full bg-transparent text-sm font-bold px-3 py-1 outline-none h-10" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AssigneeTasksView = ({ assignee, tasks, onToggleNode, onBack }) => {
+            const assigneeTasks = useMemo(() => {
+                const results = [];
+                tasks.forEach(t => {
+                    (t.nodes || []).forEach(n => {
+                        if (n.assignee === assignee && !n.completed) {
+                            results.push({ ...n, taskTitle: t.title, taskId: t.id, customerName: t.customerName });
+                        }
+                    });
+                });
+                return results.sort((a,b) => (a.plannedDate || 0) - (b.plannedDate || 0));
+            }, [tasks, assignee]);
+
+            return (
+                <div className="animate-fade-in space-y-6">
+                    <div className="flex items-center justify-between bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                        <div className="flex items-center gap-4">
+                            <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-xl transition-all"><ArrowLeft size={20}/></button>
+                            <div>
+                                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                                    <UserCheck className="text-[#4A90E2]" size={28}/> {assignee}
+                                </h2>
+                                <p className="text-sm text-slate-400 font-medium">当前有 <span className="text-[#4A90E2] font-bold">{assigneeTasks.length}</span> 个待办事项</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {assigneeTasks.length === 0 ? (
+                            <div className="col-span-full py-16 text-center text-slate-300 border-2 border-dashed border-slate-100 rounded-3xl">
+                                <Smile size={48} className="mx-auto mb-2 opacity-20"/>
+                                <p className="font-bold">太棒了！{assignee} 暂时没有待办事项</p>
+                            </div>
+                        ) : (
+                            assigneeTasks.map(node => (
+                                <div key={`${node.taskId}-${node.id}`} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                            <Briefcase size={12}/> {node.taskTitle}
+                                        </div>
+                                        <div className="text-xs font-bold text-[#4A90E2] bg-blue-50 px-2 py-1 rounded-lg">
+                                            {safeDate(node.plannedDate).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric'})}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 items-start">
+                                        <button 
+                                            onClick={() => onToggleNode(node.taskId, node.id, { completed: !node.completed })}
+                                            className="mt-0.5 text-slate-300 hover:text-green-500 transition-colors flex-shrink-0"
+                                        >
+                                            <Circle size={20} strokeWidth={2.5}/>
+                                        </button>
+                                        <div className="font-bold text-slate-700 leading-snug">{node.text}</div>
+                                    </div>
+                                    {node.customerName && (
+                                        <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2 text-xs text-slate-400 font-medium">
+                                            <User size={12}/> {node.customerName}
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const SettingsDialog = ({ onClose, tasks, onRestore }) => {
+            const [apiKey, setApiKey] = useState(localStorage.getItem('ai_api_key') || '');
+            const [baseUrl, setBaseUrl] = useState(localStorage.getItem('ai_base_url') || 'https://api.siliconflow.cn/v1');
+            const [model, setModel] = useState(localStorage.getItem('ai_model') || 'deepseek-ai/DeepSeek-V3');
+            const [systemPrompt, setSystemPrompt] = useState(localStorage.getItem('ai_system_prompt') || '');
+            const [statusMsg, setStatusMsg] = useState('');
+            const [isRestoring, setIsRestoring] = useState(false);
+
+            const handleBackup = () => {
+                const dataStr = JSON.stringify(tasks, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `BullHorse_Supabase_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+            };
+
+            const handleRestore = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsRestoring(true);
+                setStatusMsg('正在解析 JSON...');
+                
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const imported = JSON.parse(event.target.result);
+                        setStatusMsg(`解析成功，开始搬运 ${imported.length} 条数据...`);
+                        await onRestore(imported);
+                        setStatusMsg(`恢复成功！数据已进入 Supabase。`);
+                        setTimeout(() => { setStatusMsg(''); onClose(); }, 2000);
+                    } catch (err) { 
+                        console.error(err); 
+                        setStatusMsg('恢复失败: ' + err.message); 
+                    } finally {
+                        setIsRestoring(false); 
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const handleSaveSettings = () => {
+                localStorage.setItem('ai_api_key', apiKey);
+                localStorage.setItem('ai_base_url', baseUrl);
+                localStorage.setItem('ai_model', model);
+                localStorage.setItem('ai_system_prompt', systemPrompt);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-md z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-[2rem] shadow-2xl max-w-md w-full border animate-fade-in max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-black text-xl flex items-center gap-2 text-slate-800"><Settings size={24}/> 系统设置</h3>
+                            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-300 hover:text-slate-600"><X size={24}/></button>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-2">
+                                <h4 className="text-sm font-black text-emerald-700 flex items-center gap-2"><Server size={16}/> 云端状态</h4>
+                                <p className="text-xs text-emerald-600 font-bold">已连接 Supabase (PostgreSQL)</p>
+                            </div>
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                                <h4 className="text-sm font-black text-slate-700 flex items-center gap-2"><Cpu size={16}/> AI 引擎配置 (SiliconFlow)</h4>
+                                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">API Key</label><input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} className="w-full p-3 bg-white rounded-xl text-xs font-bold border border-slate-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all outline-none" placeholder="sk-..." /></div>
+                                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">API 地址</label><input type="text" value={baseUrl} onChange={e=>setBaseUrl(e.target.value)} className="w-full p-3 bg-white rounded-xl text-xs font-bold border border-slate-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all outline-none" placeholder="https://api.siliconflow.cn/v1" /></div>
+                                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">AI 引擎</label><input type="text" value={model} onChange={e=>setModel(e.target.value)} className="w-full p-3 bg-white rounded-xl text-xs font-bold border border-slate-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all outline-none" placeholder="deepseek-ai/DeepSeek-V3" /></div>
+                            </div>
+                            <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
+                                <h4 className="text-sm font-black text-indigo-700 flex items-center gap-2"><BrainCircuit size={16}/> 额外指令 (System Prompt)</h4>
+                                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">注入你的管理哲学</label><textarea value={systemPrompt} onChange={e=>setSystemPrompt(e.target.value)} className="w-full p-3 bg-white rounded-xl text-xs font-medium border border-slate-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition-all outline-none h-24 resize-none leading-relaxed" placeholder="例如：你是一个严厉的项目经理..." /></div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 ml-1">数据迁移与备份</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={handleBackup} className="flex flex-col items-center justify-center gap-2 p-4 bg-blue-50/50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-all border border-blue-100 font-black text-xs"><Download size={20}/>备份数据</button>
+                                    <label className={`flex flex-col items-center justify-center gap-2 p-4 bg-green-50/50 text-green-600 rounded-2xl hover:bg-green-100 transition-all border border-green-100 font-black cursor-pointer text-xs ${isRestoring ? 'opacity-40 animate-pulse' : ''}`}><Upload size={20}/> {isRestoring ? '恢复中' : '恢复数据 (JSON)'}<input type="file" className="hidden" accept=".json" onChange={handleRestore} disabled={isRestoring}/></label>
+                                </div>
+                                {statusMsg && <div className="mt-4 text-center text-xs font-black text-[#4A90E2] animate-bounce">{statusMsg}</div>}
+                            </div>
+                            <button onClick={handleSaveSettings} className="w-full py-4 bg-[#4A90E2] text-white rounded-2xl font-black shadow-xl shadow-blue-100 hover:bg-[#357ABD] active:scale-95 transition-all">保存设置</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ImportantNodesSection = ({ tasks, onSelectTask, onToggleNode, onDeleteNode }) => {
+            const importantNodes = useMemo(() => {
+                const nodes = [];
+                tasks.forEach(t => (t.nodes || []).forEach(n => {
+                    if (n.isImportant && !n.completed) nodes.push({ taskTitle: t.title, taskId: t.id, node: n });
+                }));
+                return nodes.sort((a, b) => (a.node.plannedDate || 0) - (b.node.plannedDate || 0));
+            }, [tasks]);
+
+            if (importantNodes.length === 0) return null;
+
+            return (
+                <div className="mb-6 p-5 bg-orange-50/60 border border-orange-100 rounded-[1.5rem] shadow-sm animate-fade-in">
+                    <h3 className="text-sm font-black text-orange-500 mb-3 flex items-center gap-2 tracking-wide uppercase"><Star size={16} className="fill-current"/> 重要待办事项 ({importantNodes.length})</h3>
+                    <div className="flex flex-col gap-2">
+                        {importantNodes.map(({ taskTitle, taskId, node }, i) => (
+                            <div key={`${taskId}-${node.id}`} onClick={() => onSelectTask(taskId)} className="flex items-center justify-between p-3 hover:bg-white/80 rounded-xl cursor-pointer transition-all border border-transparent hover:border-orange-200 group">
+                                 <div className="flex items-center gap-3 min-w-0 flex-1 pr-4">
+                                     <button onClick={(e) => { e.stopPropagation(); onToggleNode(taskId, node.id, { completed: !node.completed }); }} className="flex-shrink-0 text-orange-300 hover:text-green-500 transition-colors"><Circle size={20} strokeWidth={2.5}/></button>
+                                     <div className="min-w-0 flex-1">
+                                         <div className="text-sm text-orange-900 font-bold truncate">{node.text}</div>
+                                         <div className="text-[10px] text-orange-400/80 mt-0.5 truncate flex items-center gap-2 font-bold"><span>{taskTitle}</span>{node.assignee && <span className="bg-white px-1.5 rounded-md text-orange-500 border border-orange-100">@{node.assignee}</span>}</div>
+                                     </div>
+                                 </div>
+                                 <div className="flex items-center gap-2 flex-shrink-0">
+                                     <div className="text-xs font-black text-orange-400 bg-white/60 px-2 py-1 rounded-lg">{safeDate(node.plannedDate).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric'})}</div>
+                                     <button onClick={(e) => { e.stopPropagation(); onToggleNode(taskId, node.id, { isImportant: !node.isImportant }); }} className="text-orange-400 hover:text-orange-600 transition-colors p-1"><Star size={18} className="fill-current"/></button>
+                                     <button onClick={(e) => { e.stopPropagation(); onDeleteNode(taskId, node.id); }} className="text-orange-300 hover:text-red-500 transition-colors p-1 opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                                 </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const OverdueSection = ({ tasks, onSelectTask, onToggleNode, onDeleteNode }) => {
+            const overdueNodes = useMemo(() => {
+                const now = Date.now();
+                const nodes = [];
+                tasks.forEach(t => t.nodes?.forEach(n => {
+                    if (n.plannedDate && n.plannedDate < now && !n.completed) nodes.push({ taskTitle: t.title, taskId: t.id, node: n });
+                }));
+                return nodes.sort((a, b) => (a.node.plannedDate || 0) - (b.node.plannedDate || 0));
+            }, [tasks]);
+
+            if (overdueNodes.length === 0) return null;
+
+            return (
+                <div className="mb-8 p-5 bg-[#FFEFED] border border-[#FFD8D6] rounded-[1.5rem] shadow-sm animate-fade-in">
+                    <h3 className="text-sm font-black text-[#F5222D] mb-3 flex items-center gap-2 tracking-wide uppercase"><Flag size={16} className="fill-[#F5222D]/20"/> 逾期警报 ({overdueNodes.length})</h3>
+                    <div className="flex flex-col gap-2">
+                        {overdueNodes.map(({ taskTitle, taskId, node }) => (
+                            <div key={`${taskId}-${node.id}`} onClick={() => onSelectTask(taskId)} className="flex items-center justify-between p-3 hover:bg-[#FFF2F0] rounded-xl cursor-pointer transition-colors group">
+                                 <div className="flex items-center gap-3 min-w-0 flex-1 pr-4">
+                                     <button onClick={(e) => { e.stopPropagation(); onToggleNode(taskId, node.id, { completed: !node.completed }); }} className="flex-shrink-0 text-[#F5222D]/40 hover:text-green-500 transition-colors"><Circle size={20} strokeWidth={2.5}/></button>
+                                     <div className="min-w-0 flex-1">
+                                         <div className="text-sm text-[#5C0011] font-bold truncate">{node.text}</div>
+                                         <div className="text-[10px] text-[#F5222D]/70 mt-0.5 truncate flex items-center gap-2 font-bold"><span>{taskTitle}</span>{node.assignee && <span className="bg-white/60 px-1.5 rounded-md text-[#CF1322]">@{node.assignee}</span>}</div>
+                                     </div>
+                                 </div>
+                                 <div className="flex items-center gap-2 flex-shrink-0">
+                                     <div className="text-right">
+                                         <div className="text-xs font-black text-[#F5222D]">{safeDate(node.plannedDate).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric'})}</div>
+                                         <div className="text-[10px] font-bold text-[#F5222D]/60">{safeDate(node.plannedDate).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})}</div>
+                                     </div>
+                                     <button onClick={(e) => { e.stopPropagation(); onToggleNode(taskId, node.id, { isImportant: !node.isImportant }); }} className={`transition-colors p-1 ${node.isImportant ? 'text-orange-400' : 'text-[#F5222D]/30 hover:text-orange-400'}`}><Star size={18} className={node.isImportant ? "fill-current" : ""}/></button>
+                                     <button onClick={(e) => { e.stopPropagation(); onDeleteNode(taskId, node.id); }} className="text-[#F5222D]/40 hover:text-red-500 transition-colors p-1 opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                                 </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const CompletedNodesView = ({ tasks, onSelectTask }) => {
+            const groupedNodes = useMemo(() => {
+                const groups = [];
+                const map = {};
+                tasks.forEach(t => (t.nodes || []).forEach(n => {
+                    if (n.completed) {
+                        const ts = n.completedAt || 0; 
+                        const dateKey = ts ? new Date(ts).toLocaleDateString('zh-CN', {year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short'}) : '早期归档';
+                        const dayTs = ts ? new Date(ts).setHours(0,0,0,0) : 0;
+                        if (!map[dateKey]) { map[dateKey] = { date: dateKey, ts: dayTs, items: [] }; groups.push(map[dateKey]); }
+                        map[dateKey].items.push({ taskTitle: t.title, taskId: t.id, customerName: t.customerName, node: n });
+                    }
+                }));
+                groups.sort((a, b) => b.ts - a.ts);
+                groups.forEach(g => { g.items.sort((a, b) => (b.node.completedAt || 0) - (a.node.completedAt || 0)); });
+                return groups;
+            }, [tasks]);
+
+            return (
+                <div className="space-y-6">
+                    <div className="space-y-6">
+                        {groupedNodes.length === 0 && <div className="text-center text-[#999999] py-10">暂无已完成的节点</div>}
+                        {groupedNodes.map(group => (
+                            <div key={group.date}>
+                                <h3 className="text-sm font-black text-[#999999] mb-3 sticky top-28 bg-[#F5F7FA] py-2 z-10">{group.date}</h3>
+                                <div className="space-y-2">
+                                    {group.items.map(({ taskTitle, taskId, customerName, node }) => (
+                                        <div key={`${taskId}-${node.id}`} onClick={() => onSelectTask(taskId)} className="bg-white p-3 rounded-xl shadow-sm border border-[#E9E9E9] hover:border-[#91D5FF] transition-all cursor-pointer group flex gap-3 items-center">
+                                            <div className="text-xs font-bold text-[#4A90E2] w-12 text-right flex-shrink-0">{node.completedAt ? new Date(node.completedAt).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'}) : '--:--'}</div>
+                                            <div className="h-8 w-px bg-[#F0F0F0] flex-shrink-0"></div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm text-[#666666] font-medium line-through decoration-slate-300 truncate">{node.text}</div>
+                                                <div className="flex items-center gap-2 text-[10px] text-[#999999] mt-0.5"><span className="font-bold">{taskTitle}</span>{customerName && <span>• {customerName}</span>}</div>
+                                            </div>
+                                            {node.assignee && <span className="text-[10px] bg-[#F5F7FA] px-1.5 py-0.5 rounded text-[#999999]">{node.assignee}</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const WeeklyView = ({ tasks, onDateClick, onSelectTask, weekOffset, setWeekOffset, onToggleNode }) => {
+            const startOfWeek = useMemo(() => {
+                const d = getStartOfWeek(new Date());
+                d.setDate(d.getDate() + (weekOffset * 7));
+                return d;
+            }, [weekOffset]);
+
+            const weekData = useMemo(() => {
+                const data = Array(7).fill(null).map(() => []);
+                const endOfWeek = new Date(startOfWeek.getTime() + 7 * 86400000);
+                tasks.forEach((t) => t.nodes?.forEach((n) => {
+                    if (n.plannedDate) {
+                        const d = new Date(n.plannedDate);
+                        if (d >= startOfWeek && d < endOfWeek) {
+                            const dayIdx = (d.getDay() + 6) % 7;
+                            data[dayIdx].push({ ...n, taskTitle: t.title, taskId: t.id, customerName: t.customerName });
+                        }
+                    }
+                }));
+                return data.map(d => d.sort((a, b) => (a.plannedDate || 0) - (b.plannedDate || 0)));
+            }, [tasks, startOfWeek]);
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-[#333333] flex items-center gap-2"><Clock className="text-[#4A90E2]"/> {weekOffset === 0 ? "本周计划" : (weekOffset > 0 ? `${weekOffset}周后计划` : `${Math.abs(weekOffset)}周前计划`)}</h2>
+                            <div className="flex gap-1 ml-2 bg-white rounded-lg border border-[#E9E9E9] p-0.5">
+                                <button onClick={() => setWeekOffset((p) => p - 1)} className="p-1 hover:bg-[#F5F7FA] rounded"><ChevronLeft size={16} className="text-[#666666]"/></button>
+                                <button onClick={() => setWeekOffset(0)} className="px-2 text-xs font-medium text-[#666666] hover:text-[#4A90E2]">今天</button>
+                                <button onClick={() => setWeekOffset((p) => p + 1)} className="p-1 hover:bg-[#F5F7FA] rounded"><ChevronRight size={16} className="text-[#666666]"/></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto bg-white rounded-2xl shadow-sm border border-[#E9E9E9]">
+                        <div className="min-w-[800px] grid grid-cols-7 divide-x divide-[#F0F0F0]">
+                            {WEEK_DAYS.map((day, i) => {
+                                const date = new Date(startOfWeek.getTime() + i * 86400000);
+                                const isToday = new Date().toDateString() === date.toDateString();
+                                return (
+                                    <div key={day} className="flex flex-col">
+                                        <div onClick={() => onDateClick(date.getTime())} className={`p-3 text-center border-b border-[#F0F0F0] cursor-pointer hover:bg-[#F5F7FA] transition-colors ${isToday ? 'bg-[#E6F7FF]' : ''}`}>
+                                            <div className="text-xs text-[#999999]">{day}</div>
+                                            <div className={`text-sm font-bold ${isToday ? 'text-[#4A90E2]' : 'text-[#333333]'}`}>{date.getDate()}</div>
+                                        </div>
+                                        <div className="p-2 space-y-2 min-h-[100px]">
+                                            {weekData[i].map((node, idx) => (
+                                                <div key={idx} onClick={() => onSelectTask(node.taskId)} className="bg-[#F5F7FA] p-2 rounded-lg text-xs hover:bg-[#E6F7FF] hover:text-[#096DD9] transition-colors cursor-pointer border border-transparent hover:border-[#91D5FF] group relative">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <button onClick={(e) => { e.stopPropagation(); onToggleNode(node.taskId, node.id, { completed: !node.completed }); }} className={`flex-shrink-0 transition-colors ${node.completed ? 'text-green-500' : 'text-slate-300 hover:text-green-500'}`}>{node.completed ? <CheckCircle2 size={14} className="fill-current"/> : <Circle size={14}/>}</button>
+                                                        <span className="opacity-70 font-bold">{safeDate(node.plannedDate).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})}</span>
+                                                    </div>
+                                                    {node.customerName && <div className="text-[#4A90E2] font-semibold mb-0.5 truncate flex items-center gap-0.5"><Briefcase size={8} /> {node.customerName}</div>}
+                                                    <div className={`line-clamp-3 leading-tight ${node.completed ? 'line-through text-slate-400' : ''}`}>{node.text}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 主程序入口 ---
+        function App() {
+            const [tasks, setTasks] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [activeTaskId, setActiveTaskId] = useState(null);
+            const [activeAssignee, setActiveAssignee] = useState(null);
+            
+            const [deleteConfirm, setDeleteConfirm] = useState({open: false, taskId: null, type: 'task'});
+            const [moyuState, setMoyuState] = useState({ open: false, message: '' });
+            const [currentView, setCurrentView] = useState('all_active'); 
+            const [viewMode, setViewMode] = useState('grid');
+            const [weekOffset, setWeekOffset] = useState(0);
+            const [showQuickAdd, setShowQuickAdd] = useState(false);
+            const [showSettings, setShowSettings] = useState(false);
+            const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+            
+            // New state for Setup Guide
+            const [showSetupGuide, setShowSetupGuide] = useState(false);
+
+            const navItems = [
+                { id: 'all_active', label: '进行中' },
+                { id: 'completed_nodes', label: '节点记录' },
+                { id: 'quote', label: '报价' },
+                { id: 'order', label: '订单' },
+                { id: 'shipping', label: '发货' },
+                { id: 'payment', label: '收款' },
+                { id: 'completed_tasks', label: '已完成' },
+                { id: 'weekly', label: '周报' },
+            ];
+
+            const triggerMoyu = (isAuto = false) => {
+                const randomMsg = MOYU_MESSAGES[Math.floor(Math.random() * MOYU_MESSAGES.length)];
+                setMoyuState({ open: true, message: isAuto ? `整点报时：${randomMsg}` : randomMsg });
+            };
+
+            // Fetch Tasks from Supabase
+            const fetchTasks = async () => {
+                const { data, error } = await supabase.from('tasks').select('*');
+                if (error) {
+                    console.error("Error fetching tasks:", error);
+                    // Check specifically for Table Not Found error
+                    if (error.code === '42P01' || error.message?.includes('not find the table')) {
+                         setShowSetupGuide(true);
+                    }
+                } else {
+                    const sorted = (data || []).sort((a, b) => {
+                         const getDeadline = (t) => {
+                            const activeNodes = (t.nodes || []).filter(n => !n.completed && n.plannedDate);
+                            if (activeNodes.length === 0) return Infinity; 
+                            return Math.min(...activeNodes.map(n => n.plannedDate));
+                        };
+                        const dA = getDeadline(a); const dB = getDeadline(b);
+                        if (dA !== dB) return dA - dB;
+                        const tA = new Date(a.createdAt).getTime();
+                        const tB = new Date(b.createdAt).getTime();
+                        return tB - tA;
+                    });
+                    setTasks(sorted);
+                }
+                setLoading(false);
+            };
+
+            useEffect(() => {
+                const checkTime = () => {
+                    const now = new Date();
+                    if (now.getMinutes() === 0 && now.getSeconds() === 0) { triggerMoyu(true); }
+                };
+                const timer = setInterval(checkTime, 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            // Initial Fetch & Subscription
+            useEffect(() => {
+                fetchTasks();
+                const channel = supabase.channel('realtime_tasks')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+                        fetchTasks(); // Simple re-fetch strategy for data consistency
+                    })
+                    .subscribe();
+
+                return () => {
+                    supabase.removeChannel(channel);
+                };
+            }, []);
+
+            const handleUpdateTask = async (id, updates) => {
+                await supabase.from('tasks').update(updates).eq('id', id);
+            };
+
+            const handleToggleNode = async (taskId, nodeId, updates) => {
+                const task = tasks.find(t => t.id === taskId);
+                if (!task) return;
+                const newNodes = task.nodes.map(n => {
+                    if (n.id === nodeId) {
+                        let extra = {};
+                        if ('completed' in updates) {
+                            if (updates.completed && !n.completed) extra = { completedAt: Date.now() };
+                            else if (!updates.completed && n.completed) extra = { completedAt: null };
+                        }
+                        return { ...n, ...updates, ...extra };
+                    }
+                    return n;
+                });
+                await handleUpdateTask(taskId, { nodes: newNodes });
+            };
+
+            const requestDeleteTask = (id) => { setDeleteConfirm({ open: true, taskId: id, type: 'task' }); };
+            const requestDeleteNode = (taskId, nodeId) => { setDeleteConfirm({ open: true, taskId: taskId, nodeId: nodeId, type: 'node' }); };
+
+            const executeDelete = async () => {
+                if (!deleteConfirm.taskId) return;
+                const { taskId, nodeId, type } = deleteConfirm;
+                setDeleteConfirm({ ...deleteConfirm, open: false });
+                
+                if (type === 'task') { 
+                    await supabase.from('tasks').delete().eq('id', taskId);
+                    if (activeTaskId === taskId) setActiveTaskId(null); 
+                } else if (type === 'node' && nodeId) {
+                    const task = tasks.find(t => t.id === taskId);
+                    if (task) { 
+                        const newNodes = task.nodes.filter(n => n.id !== nodeId); 
+                        await handleUpdateTask(taskId, { nodes: newNodes });
+                    }
+                }
+            };
+
+            const handleCreateTask = async () => {
+                const newId = generateId(); 
+                const newTask = { 
+                    id: crypto.randomUUID(),
+                    title: '新牛马任务', 
+                    summary: '', 
+                    urgency: 'quote', 
+                    nodes: [], 
+                    customerName: '',
+                    createdAt: new Date().toISOString()
+                };
+                const { data, error } = await supabase.from('tasks').insert(newTask).select();
+                if (data && data[0]) setActiveTaskId(data[0].id);
+            };
+
+            const handleQuickAdd = async (data) => {
+                setShowQuickAdd(false);
+                const existing = tasks.find(t => t.title === data.taskTitle);
+                const newNode = { id: generateId(), text: data.content, completed: false, assignee: data.assignee, plannedDate: data.date, plannedEndDate: null, isImportant: data.isImportant };
+                
+                if (existing) { 
+                    const nodes = [...(existing.nodes || []), newNode]; 
+                    await handleUpdateTask(existing.id, { nodes, customerName: data.customer || existing.customerName }); 
+                } else { 
+                    await supabase.from('tasks').insert({ 
+                        id: crypto.randomUUID(),
+                        title: data.taskTitle, 
+                        summary: '', 
+                        urgency: 'quote', 
+                        nodes: [newNode], 
+                        customerName: data.customer, 
+                        createdAt: new Date().toISOString() 
+                    }); 
+                }
+            };
+
+            // Bulk Restore Function
+            const handleRestoreData = async (importedData) => {
+                // Transform data for Supabase
+                // Firebase createdAt is { seconds, nanoseconds } -> ISO String
+                const transformed = importedData.map(t => {
+                    let createdVal = new Date().toISOString();
+                    if (t.createdAt && t.createdAt.seconds) {
+                        createdVal = new Date(t.createdAt.seconds * 1000).toISOString();
+                    } else if (typeof t.createdAt === 'string') {
+                        createdVal = t.createdAt;
+                    }
+                    
+                    return {
+                        id: t.id || crypto.randomUUID(),
+                        title: t.title,
+                        customerName: t.customerName,
+                        summary: t.summary,
+                        urgency: t.urgency,
+                        nodes: t.nodes,
+                        createdAt: createdVal
+                    };
+                });
+                
+                // Chunk insert to avoid payload limits
+                const chunkSize = 50;
+                for (let i = 0; i < transformed.length; i += chunkSize) {
+                    const chunk = transformed.slice(i, i + chunkSize);
+                    await supabase.from('tasks').upsert(chunk);
+                }
+                fetchTasks();
+            };
+
+            const activeTask = tasks.find(t => t.id === activeTaskId);
+            const allCustomers = useMemo(() => Array.from(new Set(tasks.map(t => t.customerName).filter(Boolean))).sort(), [tasks]);
+            const allAssignees = useMemo(() => { const s = new Set(); tasks.forEach(t => (t.nodes || []).forEach(n => n.assignee && s.add(n.assignee))); return Array.from(s).sort(); }, [tasks]);
+
+            const filteredTasks = useMemo(() => {
+                if (currentView === 'all_active') return tasks.filter(t => t.urgency !== 'completed');
+                if (currentView === 'completed_tasks') return tasks.filter(t => t.urgency === 'completed');
+                if (['quote', 'order', 'shipping', 'payment'].includes(currentView)) return tasks.filter(t => t.urgency === currentView);
+                return tasks.filter(t => t.urgency !== 'completed');
+            }, [tasks, currentView]);
+
+            if (loading) return <div className="h-screen flex flex-col items-center justify-center bg-[#F5F7FA]"><Loader2 className="animate-spin text-[#4A90E2] mb-4" size={48}/><p className="font-black text-slate-400">正在接入 Supabase 云端数据库...</p></div>;
+
+            return (
+                <div className="min-h-screen bg-[#F5F7FA] text-[#333333] font-sans selection:bg-[#4A90E2]/20 relative">
+                    <ConfirmModal isOpen={deleteConfirm.open} onClose={() => setDeleteConfirm({ ...deleteConfirm, open: false })} onConfirm={executeDelete} title={deleteConfirm.type === 'task' ? "确认删除任务？" : "确认删除节点？"} message={deleteConfirm.type === 'task' ? "此操作无法撤销，该任务及其所有节点将被永久删除。" : "确定要删除这个执行节点吗？"} />
+                    <MoyuModal isOpen={moyuState.open} onClose={() => setMoyuState({...moyuState, open: false})} message={moyuState.message} />
+                    <SetupGuideModal isOpen={showSetupGuide} onClose={() => setShowSetupGuide(false)} />
+                    
+                    {showQuickAdd && <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-[200] flex items-center justify-center p-4"><div className="w-full max-w-lg"><QuickNodeForm tasks={tasks} allCustomers={allCustomers} allAssignees={allAssignees} initialDate={Date.now()} onSubmit={handleQuickAdd} onClose={() => setShowQuickAdd(false)}/></div></div>}
+                    {showAIAnalysis && <AIAnalysisModal tasks={tasks} onClose={() => setShowAIAnalysis(false)} />}
+                    {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} tasks={tasks} onRestore={handleRestoreData} />}
+
+                    <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#E9E9E9] shadow-sm">
+                        <div className="max-w-7xl mx-auto flex flex-col">
+                            <div className="flex items-center justify-between p-4 pb-2">
+                                <div className="flex items-center gap-3">
+                                    {activeTaskId ? (
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => setActiveTaskId(null)} className="bg-[#4A90E2] text-white px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 hover:bg-[#357ABD] transition-all active:scale-95 shadow-sm shadow-blue-100 text-sm"><ArrowLeft size={16}/>返回</button>
+                                            <button onClick={() => requestDeleteTask(activeTaskId)} className="text-slate-400 hover:text-red-500 p-2 rounded-xl transition-colors"><Trash2 size={18}/></button>
+                                        </div>
+                                    ) : activeAssignee ? (
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => setActiveAssignee(null)} className="bg-[#4A90E2] text-white px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 hover:bg-[#357ABD] transition-all active:scale-95 shadow-sm shadow-blue-100 text-sm"><ArrowLeft size={16}/>返回</button>
+                                        </div>
+                                    ) : (
+                                        <h1 className="text-xl font-black text-slate-900 tracking-tighter flex items-center gap-2"><BullIcon /> 赛博牛马的逆袭 <span className="text-[10px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded">Supa</span></h1>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => triggerMoyu(false)} className="p-2 text-yellow-500 hover:text-yellow-600 transition-all bg-yellow-50 rounded-xl hover:bg-yellow-100" title="摸鱼"><Coffee size={20}/></button>
+                                    <button onClick={() => setViewMode(prev => prev === 'grid' ? 'list' : 'grid')} className="p-2 text-slate-500 hover:text-[#4A90E2] transition-all bg-slate-50 rounded-xl hover:bg-slate-100" title={viewMode === 'grid' ? "切换到列表视图" : "切换到网格视图"}>{viewMode === 'grid' ? <List size={20}/> : <LayoutGrid size={20}/>}</button>
+                                    
+                                    <GlobalSearchBar 
+                                        tasks={tasks} 
+                                        onSelectTask={setActiveTaskId} 
+                                        onSelectAssignee={(name) => { setActiveAssignee(name); setActiveTaskId(null); }}
+                                    />
+
+                                    <button onClick={() => setShowAIAnalysis(true)} className="p-2 text-blue-400 hover:text-blue-600 transition-all bg-blue-50 rounded-xl" title="智能军师"><BrainCircuit size={20}/></button>
+                                    <button onClick={() => setShowQuickAdd(true)} className="p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all" title="快速加节点"><Zap size={20} fill="currentColor"/></button>
+                                    <button onClick={handleCreateTask} className="bg-[#4A90E2] text-white px-4 py-2 rounded-xl font-black flex items-center gap-1 shadow-lg shadow-blue-100 hover:bg-[#357ABD] transition-all active:scale-95 text-sm"><Plus size={18}/>新任务</button>
+                                    <button onClick={() => setShowSettings(true)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-all"><Settings size={20}/></button>
+                                </div>
+                            </div>
+                            {!activeTaskId && !activeAssignee && (
+                                <div className="px-4 pb-0 overflow-x-auto no-scrollbar">
+                                    <div className="flex gap-2 pb-3 min-w-max">
+                                        {navItems.map(item => (
+                                            <button key={item.id} onClick={() => setCurrentView(item.id)} className={`px-4 py-2 rounded-xl text-xs font-black transition-all border ${currentView === item.id ? 'bg-[#4A90E2] text-white border-[#4A90E2] shadow-md shadow-blue-200' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300 hover:bg-slate-50'}`}>{item.label}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </header>
+
+                    <main className="max-w-7xl mx-auto p-4 pb-20">
+                        {activeTaskId && activeTask ? (
+                            <TaskDetailView task={activeTask} onUpdate={handleUpdateTask} onClose={() => setActiveTaskId(null)} allAssignees={allAssignees} allCustomers={allCustomers} onDeleteNode={requestDeleteNode} />
+                        ) : activeAssignee ? (
+                            <AssigneeTasksView assignee={activeAssignee} tasks={tasks} onToggleNode={handleToggleNode} onBack={() => setActiveAssignee(null)} />
+                        ) : currentView === 'weekly' ? (
+                            <WeeklyView tasks={tasks} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onSelectTask={setActiveTaskId} onToggleNode={handleToggleNode} onDateClick={(ts)=>{}} />
+                        ) : currentView === 'completed_nodes' ? (
+                            <CompletedNodesView tasks={tasks} onSelectTask={setActiveTaskId} onBack={() => setCurrentView('all_active')} />
+                        ) : (
+                            <>
+                                {currentView === 'all_active' && (
+                                    <div className="col-span-full">
+                                        <ImportantNodesSection tasks={tasks} onSelectTask={setActiveTaskId} onToggleNode={handleToggleNode} onDeleteNode={requestDeleteNode} />
+                                        <OverdueSection tasks={tasks} onSelectTask={setActiveTaskId} onToggleNode={handleToggleNode} onDeleteNode={requestDeleteNode} />
+                                    </div>
+                                )}
+                                <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" : "flex flex-col gap-3"}>
+                                    {filteredTasks.map(t => {
+                                        const nextNodes = (t.nodes || []).filter(n => !n.completed && n.plannedDate).sort((a,b) => (a.plannedDate || 0) - (b.plannedDate || 0));
+                                        const nextNode = nextNodes[0];
+                                        const config = urgencyConfig[t.urgency] || urgencyConfig['quote'];
+                                        const StatusIcon = config.icon || Circle;
+
+                                        if (viewMode === 'list') {
+                                            return (
+                                                <div key={t.id} onClick={() => setActiveTaskId(t.id)} className="group bg-white p-3 rounded-xl shadow-sm border border-[#E9E9E9] hover:border-[#91D5FF] cursor-pointer transition-all hover:translate-x-1 flex items-center gap-4 animate-fade-in">
+                                                    <div className={`w-24 shrink-0 text-center text-[10px] px-2 py-1 rounded-lg font-medium ${config.color} flex items-center justify-center gap-1`}>
+                                                        <StatusIcon size={10} className="stroke-[3]"/><span className="truncate">{config.label}</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-baseline gap-2"><h4 className="font-bold text-slate-800 truncate">{t.title}</h4>{t.customerName && <span className="text-[10px] text-slate-400 truncate">• {t.customerName}</span>}</div>
+                                                        {nextNode ? (<div className="flex items-center gap-2 mt-0.5"><span className="text-[10px] text-orange-400 font-bold whitespace-nowrap bg-orange-50 px-1.5 rounded">{safeDate(nextNode.plannedDate).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric'})}</span><span className="text-xs text-slate-500 truncate max-w-[200px]">{nextNode.text}</span></div>) : (<div className="text-[10px] text-slate-300 mt-0.5">暂无待办</div>)}
+                                                    </div>
+                                                    <div className="flex items-center gap-4 shrink-0">
+                                                        <div className="text-[10px] font-bold text-slate-300 flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg"><ListChecks size={12}/>{t.nodes?.filter(n=>n.completed).length || 0}/{t.nodes?.length || 0}</div>
+                                                        <button onClick={(e) => { e.stopPropagation(); requestDeleteTask(t.id); }} className="text-slate-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return (
+                                            <div key={t.id} onClick={() => setActiveTaskId(t.id)} className="group bg-white p-3 rounded-xl shadow-[0_2px_12px_0_rgba(0,0,0,0.05)] border border-transparent hover:shadow-[0_4px_16px_0_rgba(0,0,0,0.08)] cursor-pointer transition-all hover:-translate-y-0.5 relative flex flex-col justify-between h-full animate-fade-in">
+                                                <div>
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded-lg font-medium ${config.color} flex items-center gap-1`}><StatusIcon size={10} className="stroke-[3]"/>{config.label}</span>
+                                                        <button onClick={(e) => { e.stopPropagation(); requestDeleteTask(t.id); }} className="text-slate-200 hover:text-[#FF4D4F] opacity-100 transition-colors p-2 relative z-20"><Trash2 size={14}/></button>
+                                                    </div>
+                                                    <div className="font-bold text-[#333333] mb-1 line-clamp-1">{t.title}</div>
+                                                    {t.customerName && <div className="text-[10px] text-[#999999] flex items-center gap-1 mb-2"><User size={10}/> {t.customerName}</div>}
+                                                </div>
+                                                {nextNode ? (
+                                                    <div className="mt-2 p-2 bg-[#F9FAFB] rounded-lg border border-[#F0F0F0] flex items-center gap-2 group/node" onClick={(e) => e.stopPropagation()}>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleToggleNode(t.id, nextNode.id, { completed: !nextNode.completed }); }} className="text-slate-300 hover:text-green-500 transition-colors flex-shrink-0"><Circle size={16}/></button>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="text-xs font-bold text-slate-700 truncate">{nextNode.text}</div>
+                                                            <div className="text-[10px] text-orange-400 font-medium flex items-center gap-1"><Clock size={10} />{safeDate(nextNode.plannedDate).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'})}</div>
+                                                        </div>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleToggleNode(t.id, nextNode.id, { isImportant: !nextNode.isImportant }); }} className={`transition-colors flex-shrink-0 ${nextNode.isImportant ? 'text-orange-400' : 'text-slate-200 hover:text-orange-400'}`}><Star size={14} className={nextNode.isImportant ? "fill-current" : ""}/></button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-2 h-10 flex items-center justify-center text-[10px] text-slate-300 border border-dashed border-slate-100 rounded-lg">暂无待办节点</div>
+                                                )}
+                                                <div className="flex items-center gap-2 pt-2 border-t border-[#F0F0F0] text-[10px] text-[#999999] mt-2">
+                                                    <div className="flex-1 h-1 bg-[#E9E9E9] rounded-full overflow-hidden"><div className="h-full bg-[#4A90E2]" style={{width: `${t.nodes?.length ? (t.nodes.filter(n=>n.completed).length/t.nodes.length)*100 : 0}%`}}></div></div>
+                                                    <span>{t.nodes?.filter(n=>n.completed).length || 0}/{t.nodes?.length || 0}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {filteredTasks.length === 0 && <div className="col-span-full py-12 text-center text-[#BFBFBF] border-2 border-dashed border-[#E9E9E9] rounded-2xl"><CloudLightning size={48} className="mx-auto mb-2 opacity-20"/>{currentView === 'all_active' ? '暂无进行中的任务' : '此状态下暂无任务'}</div>}
+                                </div>
+                            </>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
